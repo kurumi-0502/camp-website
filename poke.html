@@ -118,71 +118,78 @@
     }
   }
 
-  function loadPokemon() {
+  async function loadPokemon() {
     let pokemonNumber = Math.floor(Math.random() * 898) + 1;
 
-    fetch(`https://pokeapi.co/api/v2/pokemon/${pokemonNumber}`)
-      .then(response => response.json())
-      .then(data => {
-        // 画像をフェードイン
-        pokemonImage.style.opacity = 0;
-        setTimeout(() => {
-          pokemonImage.src = data.sprites.front_default;
-          pokemonImage.style.opacity = 1;
-        }, 200);
+    try {
+      const response = await fetch(`https://pokeapi.co/api/v2/pokemon/${pokemonNumber}`);
+      const data = await response.json();
 
-        // タイプ
-        let types = data.types.map(t => t.type.name);
-        let badges = types.map(t => createTypeBadge(t)).join(" ");
+      // 画像をフェードイン
+      pokemonImage.style.opacity = 0;
+      setTimeout(() => {
+        pokemonImage.src = data.sprites.front_default;
+        pokemonImage.style.opacity = 1;
+      }, 200);
 
-        // 高さ・重さ・タイプ
-        pokemonInfo.innerHTML = `
-          <p>全国図鑑 No.${data.id}</p>
-          <p>高さ: ${data.height / 10} m</p>
-          <p>重さ: ${data.weight / 10} kg</p>
-          <p>タイプ: ${badges}</p>
-        `;
+      // タイプ
+      let types = data.types.map(t => t.type.name);
+      let badges = types.map(t => createTypeBadge(t)).join(" ");
 
-        // 背景色を変更
-        setBackground(types);
+      // 基本情報
+      pokemonInfo.innerHTML = `
+        <p>全国図鑑 No.${data.id}</p>
+        <p>高さ: ${data.height / 10} m</p>
+        <p>重さ: ${data.weight / 10} kg</p>
+        <p>タイプ: ${badges}</p>
+      `;
 
-        // species API を呼んで日本語名などを取得
-        return fetch(data.species.url);
-      })
-      .then(response => response.json())
-      .then(speciesData => {
-        // 日本語名
-        let jaName = speciesData.names.find(n => n.language.name === "ja");
-        pokemonName.textContent = jaName ? jaName.name : "名前不明";
+      // 背景色
+      setBackground(types);
 
-        // 分類
-        let jaGenus = speciesData.genera.find(g => g.language.name === "ja");
-        pokemonGenus.textContent = jaGenus ? jaGenus.genus : "";
+      // species API
+      const speciesResponse = await fetch(data.species.url);
+      const speciesData = await speciesResponse.json();
 
-        // 図鑑説明文（最新の日本語1つ）
-        let jaText = speciesData.flavor_text_entries.find(f => f.language.name === "ja");
-        pokemonDescription.textContent = jaText ? jaText.flavor_text.replace(/\n|\f/g, " ") : "";
+      // 日本語名
+      let jaName = speciesData.names.find(n => n.language.name === "ja");
+      pokemonName.textContent = jaName ? jaName.name : "名前不明";
 
-        // 進化チェーンを取得
-        return fetch(speciesData.evolution_chain.url);
-      })
-      .then(response => response.json())
-      .then(evolutionData => {
-        let chain = evolutionData.chain;
-        let evoNames = [];
+      // 分類
+      let jaGenus = speciesData.genera.find(g => g.language.name === "ja");
+      pokemonGenus.textContent = jaGenus ? jaGenus.genus : "";
 
-        // チェーンをたどって進化系をリスト化
-        while (chain) {
-          evoNames.push(chain.species.name);
-          chain = chain.evolves_to[0];
-        }
+      // 図鑑説明文
+      let jaText = speciesData.flavor_text_entries.find(f => f.language.name === "ja");
+      pokemonDescription.textContent = jaText ? jaText.flavor_text.replace(/\n|\f/g, " ") : "";
 
-        // 表示（英語名→日本語名に変換したい場合は追加fetch必要）
-        pokemonEvolution.textContent = "進化チェーン: " + evoNames.join(" → ");
-      })
-      .catch(error => {
-        console.error(`エラーが発生しました: ${error}`);
-      });
+      // 進化チェーン
+      const evoResponse = await fetch(speciesData.evolution_chain.url);
+      const evolutionData = await evoResponse.json();
+
+      let chain = evolutionData.chain;
+      let evoUrls = [];
+
+      // 進化系の species.url を取得
+      while (chain) {
+        evoUrls.push(chain.species.url);
+        chain = chain.evolves_to[0];
+      }
+
+      // 日本語名を取得
+      let jaNames = [];
+      for (let url of evoUrls) {
+        let res = await fetch(url);
+        let evoData = await res.json();
+        let jaName = evoData.names.find(n => n.language.name === "ja");
+        jaNames.push(jaName ? jaName.name : evoData.name);
+      }
+
+      pokemonEvolution.textContent = "進化チェーン: " + jaNames.join(" → ");
+
+    } catch (error) {
+      console.error("エラーが発生しました:", error);
+    }
   }
 
   // 初回表示
@@ -194,3 +201,4 @@
 
 </body>
 </html>
+
